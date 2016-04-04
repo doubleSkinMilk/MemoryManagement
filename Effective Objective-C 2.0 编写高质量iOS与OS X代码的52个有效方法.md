@@ -206,3 +206,177 @@ NSString *const UIApplicationDidBecomeActiveNotification = @"UIApplicationDidBec
 2:在.m文件中使用static const来定义`只在编译单元内可见的常量`不会在全局符号表中,因此无需为其加命名前缀
 3:在头文件使用extern来声明全局常量,并在实现文件中为其定义值,这种常量会出现在全局符号表中,所以名称应该加上类的前缀,加以区隔
 
+##(5)用枚举表示状态,选项,状态码
+
+```objc
+enum XXXState{
+    XXXStateBegin,
+    XXXStateEnd
+};
+```
+以上定义了两种状态,用枚举可以轻松的表示,编译器会为枚举分配一个独立的编号从0开始,每个枚举一次递增1,`枚举所用的数据类型取决于编译器`
+
+然而定义枚举变量的方式不太简洁
+
+```objc
+enum XXXState state = XXXStateBegin;
+```
+这是就要使用关键字`typedef`
+
+```
+enum XXXState{
+    XXXStateBegin,
+    XXXStateEnd
+};
+typedef enum XXXState XXXState;
+```
+这时 就可以直接用XXXState定义枚举变量了
+
+```objc
+XXXState state = XXXStateBegin;
+```
+---
+>在c++11标准修订了枚举的某些特性,其中一项改动是可以指明用何种`底层数据类型`
+>这样做的好处是让编译器知道数据类型的大小,在定义枚举变量时,明确分配多少内存空间
+
+```objc
+//声明方式1
+enum XXXState:NSInteger{
+    XXXStateBegin,
+    XXXStateEnd
+};
+//声明方式2
+enum XXXState:NSInteger;
+enum XXXState{
+    XXXStateBegin = 1,
+    XXXStateEnd
+};//这里手动声明XXXStateBegin = 1,而不使用编译器默认分配的0,那么XXXStateEnd就等于2
+```
+___
+>当先定义选项的时候,枚举也可以派上用场
+>通过按位或`|`操作符组合,通过按位与`&`来判断开启哪了个选项
+
+```
+enum UIInterfaceOrientationMask{
+    UIInterfaceOrientationMaskPortrait = 1<<0,
+    UIInterfaceOrientationMaskLandscapeLeft = 1<<2,
+    UIInterfaceOrientationMaskLandscapeRight = 1<<3,
+}
+```
+我们定义了屏幕的方向,当我们想设置设备支持左和右的时候,就可以如下定义
+
+```
+enum UIInterfaceOrientationMask resizing = UIInterfaceOrientationMaskLandscapeLeft|UIInterfaceOrientationMaskLandscapeRight;
+
+//判断如下
+if (resizing&UIInterfaceOrientationMaskLandscapeLeft) {//支持左}
+if (resizing&UIInterfaceOrientationMaskLandscapeRight) {//支持右}
+```
+___
+>Foundation框架定义了辅助的宏
+>可以指定枚举类型,可以向后兼容即`如果编译器支持新标准,就使用新语法,否则使用旧语法`
+> `NS_ENUM`和`NS_OPTIONS`
+
+```
+typedef NS_ENUM(NSInteger,XXXState){
+    XXXStateBegin,
+    XXXStateEnd
+};
+typedef NS_OPTIONS(NSInteger,UIInterfaceOrientationMask){
+    UIInterfaceOrientationMaskPortrait = 1<<0,
+    UIInterfaceOrientationMaskLandscapeLeft = 1<<2,
+    UIInterfaceOrientationMaskLandscapeRight = 1<<3,
+};
+```
+宏定义如下
+
+```
+#if(编译器支持新枚举标准){
+#define NS_ENUM(_type,_name)
+        enum _name : _type _name; enum _name : _type
+        if (c++编译器) {
+#define NS_OPTIONS(_type,_name)
+        type _name;enum:_type
+        }else{
+#define NS_OPTIONS(_type,_name)
+        enum _name : _type _name; enum _name : _type
+        }
+    }else{
+#define NS_ENUM(_type,_name) _type _name;enum
+#define NS_OPTIONS(_type,_name) _type _name;enum
+    }
+#endif
+```
+为了便于理解,依次举例
+>当编译器支持新特性 NS_ENUM 展开形式如下
+
+```
+typedef enum XXXState : NSInteger XXXState;
+enum XXXState:NSInteger{
+    XXXStateBegin,
+    XXXStateEnd
+};
+```
+>当编译器支持新特性 NS_OPTIONS 在c++中展开形式如下
+>__因为编译器在c++模式下执行按位或操作的结果NSInteger需要显示的转换为UIInterfaceOrientationMask,这个宏已经做好了,所以组合枚举用要用NS_OPTIONS__
+
+```
+typedef NSInteger UIInterfaceOrientationMask;
+enum NSInteger{
+    UIInterfaceOrientationMaskPortrait = 1<<0,
+    UIInterfaceOrientationMaskLandscapeLeft = 1<<2,
+    UIInterfaceOrientationMaskLandscapeRight = 1<<3,
+}
+```
+>当编译器支持新特性 NS\_OPTIONS 在非c++中展开形式如下
+>可以看到跟当编译器支持新特性的NS\_ENUM一样
+
+```
+typedef enum UIInterfaceOrientationMask : NSInteger UIInterfaceOrientationMask;
+enum UIInterfaceOrientationMask : NSInteger{
+    UIInterfaceOrientationMaskPortrait = 1<<0,
+    UIInterfaceOrientationMaskLandscapeLeft = 1<<2,
+    UIInterfaceOrientationMaskLandscapeRight = 1<<3,
+}
+```
+>当编译器不支持新特性 NS_ENUM
+
+```
+typedef NSInteger XXXState;
+enum {
+    XXXStateBegin,
+    XXXStateEnd
+};
+```
+>当编译器不支持新特性 NS_OPTIONS
+
+```
+typedef NSInteger UIInterfaceOrientationMask;
+enum{
+    UIInterfaceOrientationMaskPortrait = 1<<0,
+    UIInterfaceOrientationMaskLandscapeLeft = 1<<2,
+    UIInterfaceOrientationMaskLandscapeRight = 1<<3,
+}
+```
+___
+>在swift语法中可以用到枚举
+>注意结尾不要default分支,因为加上默认分之后,当增加枚举成员,编译去不会发出警告,相反 不加默认分之后,编译器会告诉你少case一个枚举成员而发出警告,这样会更安全一些,减少人为的失误
+
+```
+  XXXState state = XXXStateBegin;
+    switch (state) {
+        case XXXStateBegin:
+            //开始了
+            break;
+        case XXXStateEnd:
+            //结束了
+            break;
+    }
+```
+
+1:定义枚举,名字要非常明确易懂
+2:选项操作可移动过将值定义为2的幂,通过`|`组合
+3:尽量使用NS\_ENUM 和 NS\_OPTIONS,告知编译器类型
+3:switch语句处理枚举 不要实现default分支
+
+
